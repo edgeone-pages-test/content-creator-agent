@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -28,6 +28,11 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
   const [length, setLength] = useState("medium");
   const [mode, setMode] = useState<"deepagent" | "lite">("lite");
 
+  // AI keyword suggestion state
+  const [suggestedKeywords, setSuggestedKeywords] = useState("");
+  const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
+  const lastSuggestedTopic = useRef("");
+
   // Apply preferences (long-term memory) when loaded
   useEffect(() => {
     if (preferences) {
@@ -35,6 +40,46 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
       if (preferences.defaultLength) setLength(preferences.defaultLength);
     }
   }, [preferences]);
+
+  // Fetch keyword suggestions when topic loses focus
+  const handleTopicBlur = useCallback(() => {
+    const trimmed = topic.trim();
+    if (!trimmed || keywords.trim() || trimmed === lastSuggestedTopic.current) return;
+
+    lastSuggestedTopic.current = trimmed;
+    setIsLoadingKeywords(true);
+    setSuggestedKeywords("");
+
+    fetch('/suggest-keywords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: trimmed }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.keywords) {
+          setSuggestedKeywords(data.keywords);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingKeywords(false));
+  }, [topic, keywords]);
+
+  // Accept the AI suggestion
+  const handleAcceptSuggestion = useCallback(() => {
+    if (suggestedKeywords) {
+      setKeywords(suggestedKeywords);
+      setSuggestedKeywords("");
+    }
+  }, [suggestedKeywords]);
+
+  // Clear suggestion when user types keywords manually
+  const handleKeywordsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setKeywords(e.target.value);
+    if (e.target.value && suggestedKeywords) {
+      setSuggestedKeywords("");
+    }
+  }, [suggestedKeywords]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,19 +105,36 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
             placeholder={t.topicPlaceholder}
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
+            onBlur={handleTopicBlur}
             disabled={isGenerating}
           />
 
           <Input
             id="keywords"
             label={t.keywords}
-            placeholder={t.keywordsPlaceholder}
+            placeholder={isLoadingKeywords ? ((t as any).suggestingKeywords || '正在生成建议关键词...') : t.keywordsPlaceholder}
             value={keywords}
-            onChange={(e) => setKeywords(e.target.value)}
+            onChange={handleKeywordsChange}
             disabled={isGenerating}
+            suggestion={suggestedKeywords}
+            suggestionHint={(t as any).keywordSuggestionHint || '填入建议'}
+            onAcceptSuggestion={handleAcceptSuggestion}
           />
+
+          {/* Loading indicator for keyword suggestion */}
+          {isLoadingKeywords && (
+            <div className="flex items-center gap-1.5 -mt-2">
+              <div className="flex gap-0.5">
+                <span className="h-1 w-1 rounded-full bg-brand-400 animate-bounce [animation-delay:0ms]" />
+                <span className="h-1 w-1 rounded-full bg-brand-400 animate-bounce [animation-delay:150ms]" />
+                <span className="h-1 w-1 rounded-full bg-brand-400 animate-bounce [animation-delay:300ms]" />
+              </div>
+              <span className="text-[10px] text-gray-400">{(t as any).suggestingKeywords || '正在生成建议关键词...'}</span>
+            </div>
+          )}
+
           {/* Keyword suggestions from long-term memory */}
-          {preferences?.recentKeywords && preferences.recentKeywords.length > 0 && !keywords && (
+          {preferences?.recentKeywords && preferences.recentKeywords.length > 0 && !keywords && !suggestedKeywords && (
             <div className="flex flex-wrap gap-1 -mt-2">
               {preferences.recentKeywords.slice(0, 6).map((kw: string, i: number) => (
                 <button

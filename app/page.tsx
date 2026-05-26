@@ -14,6 +14,7 @@ import { OutlineCard } from "./components/outline-card";
 import { LanguageToggle } from "@/components/ui/language-toggle";
 import { TokenUsage } from "@/components/ui/token-usage";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export type StepStatus = "pending" | "active" | "done";
 export type Step = "research" | "outline" | "writing" | "review" | "refine";
@@ -78,6 +79,8 @@ export default function Home() {
   // Preferences state (long-term memory)
   const [preferences, setPreferences] = useState<any>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
   // Ref for triggering scroll
   const editorScrollRef = useRef<{ scrollToTop: () => void; scrollToSection: (index: number) => void } | null>(null);
@@ -95,7 +98,7 @@ export default function Home() {
           setPreferences(data.preferences);
         }
         if (data?.error === 'BLOB_NOT_CONFIGURED') {
-          setStorageWarning('本地开发需要配置 Blob 存储环境变量才能使用文章历史和偏好记忆功能。请在 .env 文件中设置 BLOB_PROJECT_ID 和 BLOB_TOKEN。');
+          setStorageWarning(t.blobNotConfigured);
         }
       })
       .catch(() => {});
@@ -120,6 +123,7 @@ export default function Home() {
       // Step 1: Generate outline first (human-in-the-loop)
       setIsGeneratingOutline(true);
       setOutline(null);
+      setApiError(null);
       setPendingParams(params);
       setContent("");
       setSeoData(null);
@@ -236,7 +240,18 @@ export default function Home() {
           signal: controller.signal,
         });
 
-        if (!response.ok) throw new Error("Failed to start generation");
+        if (!response.ok) {
+          let errMsg = `${t.requestFailed} (${response.status})`;
+          try {
+            const errBody = await response.text();
+            if (response.status === 429 || errBody.includes('quota')) {
+              errMsg = t.quotaExhausted;
+            } else if (errBody) {
+              errMsg = errBody.slice(0, 200);
+            }
+          } catch {}
+          throw new Error(errMsg);
+        }
 
         const reader = response.body?.getReader();
         if (!reader) throw new Error("No response body");
@@ -307,6 +322,12 @@ export default function Home() {
 
                 case "error_message":
                   console.error("Stream error:", event.content);
+                  const errContent = event.content || "";
+                  if (errContent.includes("429") || errContent.includes("quota")) {
+                    setApiError(t.quotaExhausted);
+                  } else {
+                    setApiError(errContent);
+                  }
                   break;
 
                 case "usage":
@@ -353,6 +374,7 @@ export default function Home() {
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           console.error("Generation error:", err);
+          setApiError((err as Error).message || t.generationFailed);
         }
       } finally {
         setIsGenerating(false);
@@ -443,8 +465,58 @@ export default function Home() {
     }
   }, []);
 
+  const handleSaveError = useCallback((message: string) => {
+    setToastMessage({ text: message, type: 'error' });
+    setTimeout(() => setToastMessage(null), 5000);
+  }, []);
+
   return (
     <div className="min-h-screen">
+      {/* Toast notification (top-right) */}
+      {toastMessage && (
+        <div className="fixed top-4 right-4 z-[100] animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className={cn(
+            "flex items-start gap-2 rounded-lg border px-4 py-3 shadow-lg max-w-sm",
+            toastMessage.type === 'error'
+              ? "bg-red-50 border-red-200 dark:bg-red-900/30 dark:border-red-800"
+              : "bg-green-50 border-green-200 dark:bg-green-900/30 dark:border-green-800"
+          )}>
+            <span className={cn(
+              "mt-0.5 flex-shrink-0",
+              toastMessage.type === 'error' ? "text-red-500" : "text-green-500"
+            )}>
+              {toastMessage.type === 'error' ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            </span>
+            <p className={cn(
+              "text-xs flex-1",
+              toastMessage.type === 'error'
+                ? "text-red-700 dark:text-red-300"
+                : "text-green-700 dark:text-green-300"
+            )}>
+              {toastMessage.text}
+            </p>
+            <button
+              onClick={() => setToastMessage(null)}
+              className={cn(
+                "flex-shrink-0 text-sm leading-none",
+                toastMessage.type === 'error'
+                  ? "text-red-400 hover:text-red-600"
+                  : "text-green-400 hover:text-green-600"
+              )}
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-950/80">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4">
@@ -477,11 +549,22 @@ export default function Home() {
             <div className="flex-1">
               <p className="text-xs text-amber-700 dark:text-amber-400">{storageWarning}</p>
               <p className="text-[11px] text-amber-600/80 dark:text-amber-500/80 mt-0.5">
-                获取方式：<a href="https://cloud.tencent.com/document/product/1552/131425" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-800 dark:hover:text-amber-300">查看文档</a>
-                {" "}| 部署到 EdgeOne Pages 后自动注入，无需手动配置。
+                <a href="https://cloud.tencent.com/document/product/1552/131425" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-800 dark:hover:text-amber-300">{t.blobDocLink}</a>
+                {" "}| {t.blobAutoConfig}
               </p>
             </div>
             <button onClick={() => setStorageWarning(null)} className="text-amber-400 hover:text-amber-600 text-sm leading-none">×</button>
+          </div>
+        </div>
+      )}
+      {apiError && (
+        <div className="mx-auto max-w-[1600px] px-4 pt-4">
+          <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <span className="text-red-500 mt-0.5">❌</span>
+            <div className="flex-1">
+              <p className="text-xs text-red-700 dark:text-red-400">{apiError}</p>
+            </div>
+            <button onClick={() => setApiError(null)} className="text-red-400 hover:text-red-600 text-sm leading-none">×</button>
           </div>
         </div>
       )}
@@ -544,6 +627,7 @@ export default function Home() {
               shouldAutoSave={shouldAutoSave}
               onAutoSaved={handleAutoSaved}
               currentArticleId={currentArticleId}
+              onSaveError={handleSaveError}
             />
           </main>
 

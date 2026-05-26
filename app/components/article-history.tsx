@@ -31,6 +31,7 @@ interface ArticleHistoryProps {
   shouldAutoSave: boolean;
   onAutoSaved: (savedId: string, savedVersions: ArticleVersion[]) => void;
   currentArticleId: string | null;
+  onSaveError?: (message: string) => void;
 }
 
 export function ArticleHistory({
@@ -41,6 +42,7 @@ export function ArticleHistory({
   shouldAutoSave,
   onAutoSaved,
   currentArticleId,
+  onSaveError,
 }: ArticleHistoryProps) {
   const { t } = useI18n();
   const [articles, setArticles] = useState<ArticleRecord[]>([]);
@@ -100,6 +102,11 @@ export function ArticleHistory({
           });
           if (res.ok) {
             const data = await res.json();
+            if (data.error === 'BLOB_NOT_CONFIGURED') {
+              onSaveError?.(data.message || 'Blob storage is not configured.');
+              onAutoSaved(currentArticleId, []);
+              return;
+            }
             setSavedToast(true);
             setTimeout(() => setSavedToast(false), 2000);
             await fetchArticles();
@@ -118,7 +125,18 @@ export function ArticleHistory({
               onAutoSaved(currentArticleId, []);
             }
           } else {
-            console.error('AddVersion failed:', res.status, await res.text());
+            const errText = await res.text();
+            try {
+              const errData = JSON.parse(errText);
+              if (errData.error === 'BLOB_NOT_CONFIGURED') {
+                onSaveError?.(errData.message || 'Blob storage is not configured.');
+              } else {
+                onSaveError?.(errData.message || `Save failed (${res.status})`);
+              }
+            } catch {
+              onSaveError?.(`Save failed (${res.status})`);
+            }
+            console.error('AddVersion failed:', res.status, errText);
             onAutoSaved(currentArticleId, []);
           }
         } else {
@@ -139,6 +157,11 @@ export function ArticleHistory({
           });
           if (res.ok) {
             const data = await res.json();
+            if (data.error === 'BLOB_NOT_CONFIGURED') {
+              onSaveError?.(data.message || 'Blob storage is not configured.');
+              onAutoSaved('', []);
+              return;
+            }
             setSavedToast(true);
             setTimeout(() => setSavedToast(false), 2000);
             await fetchArticles();
@@ -148,7 +171,18 @@ export function ArticleHistory({
             const wordCount = chinese + english;
             onAutoSaved(data.id, [{ content: currentContent, createdAt: new Date().toISOString(), wordCount }]);
           } else {
-            console.error('Save failed:', res.status, await res.text());
+            const errText = await res.text();
+            try {
+              const errData = JSON.parse(errText);
+              if (errData.error === 'BLOB_NOT_CONFIGURED') {
+                onSaveError?.(errData.message || 'Blob storage is not configured.');
+              } else {
+                onSaveError?.(errData.message || `Save failed (${res.status})`);
+              }
+            } catch {
+              onSaveError?.(`Save failed (${res.status})`);
+            }
+            console.error('Save failed:', res.status, errText);
             onAutoSaved('', []);
           }
         }
