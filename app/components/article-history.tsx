@@ -78,39 +78,41 @@ export function ArticleHistory({
     fetchArticles();
   }, [fetchArticles]);
 
-  // Auto-save: create new article OR add version to existing
+  // Auto-save: create new article or add version to existing
   useEffect(() => {
     if (!shouldAutoSave || !currentContent) return;
 
-    // Small delay to ensure state has settled after refine
     const timer = setTimeout(() => {
       const autoSave = async () => {
         const firstLine = currentContent.split('\n').find((l) => l.trim()) || 'Untitled';
         const title = firstLine.replace(/^#+\s*/, '').slice(0, 100);
 
-      try {
-        if (currentArticleId) {
-          // Add version to existing article
-          const res = await fetch('/articles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'addVersion',
-              id: currentArticleId,
-              content: currentContent,
-            }),
-          });
-          if (res.ok) {
+        try {
+          if (currentArticleId) {
+            const res = await fetch('/articles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'addVersion', id: currentArticleId, content: currentContent }),
+            });
+
+            if (!res.ok) {
+              const errData = await res.json().catch(() => null);
+              onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              onAutoSaved(currentArticleId, []);
+              return;
+            }
+
             const data = await res.json();
             if (data.error === 'BLOB_NOT_CONFIGURED') {
               onSaveError?.(data.message || 'Blob storage is not configured.');
               onAutoSaved(currentArticleId, []);
               return;
             }
+
             setSavedToast(true);
             setTimeout(() => setSavedToast(false), 2000);
             await fetchArticles();
-            // Fetch updated article to get versions
+
             const articleRes = await fetch('/articles', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -118,82 +120,51 @@ export function ArticleHistory({
             });
             if (articleRes.ok) {
               const articleData = await articleRes.json();
-              const vers = articleData.article?.versions || [];
-              console.log('[history] addVersion success, fetched versions:', vers.length);
-              onAutoSaved(currentArticleId, vers);
+              onAutoSaved(currentArticleId, articleData.article?.versions || []);
             } else {
               onAutoSaved(currentArticleId, []);
             }
           } else {
-            const errText = await res.text();
-            try {
-              const errData = JSON.parse(errText);
-              if (errData.error === 'BLOB_NOT_CONFIGURED') {
-                onSaveError?.(errData.message || 'Blob storage is not configured.');
-              } else {
-                onSaveError?.(errData.message || `Save failed (${res.status})`);
-              }
-            } catch {
-              onSaveError?.(`Save failed (${res.status})`);
+            const res = await fetch('/articles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'save',
+                article: { title, content: currentContent, keywords: currentKeywords, style: currentStyle, createdAt: new Date().toISOString() },
+              }),
+            });
+
+            if (!res.ok) {
+              const errData = await res.json().catch(() => null);
+              onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              onAutoSaved('', []);
+              return;
             }
-            console.error('AddVersion failed:', res.status, errText);
-            onAutoSaved(currentArticleId, []);
-          }
-        } else {
-          // Create new article
-          const res = await fetch('/articles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'save',
-              article: {
-                title,
-                content: currentContent,
-                keywords: currentKeywords,
-                style: currentStyle,
-                createdAt: new Date().toISOString(),
-              },
-            }),
-          });
-          if (res.ok) {
+
             const data = await res.json();
             if (data.error === 'BLOB_NOT_CONFIGURED') {
               onSaveError?.(data.message || 'Blob storage is not configured.');
               onAutoSaved('', []);
               return;
             }
+
             setSavedToast(true);
             setTimeout(() => setSavedToast(false), 2000);
             await fetchArticles();
-            // Return the new article's id and initial version
+
             const chinese = (currentContent.match(/[\u4e00-\u9fff]/g) || []).length;
             const english = currentContent.replace(/[\u4e00-\u9fff]/g, '').split(/\s+/).filter(Boolean).length;
             const wordCount = chinese + english;
             onAutoSaved(data.id, [{ content: currentContent, createdAt: new Date().toISOString(), wordCount }]);
-          } else {
-            const errText = await res.text();
-            try {
-              const errData = JSON.parse(errText);
-              if (errData.error === 'BLOB_NOT_CONFIGURED') {
-                onSaveError?.(errData.message || 'Blob storage is not configured.');
-              } else {
-                onSaveError?.(errData.message || `Save failed (${res.status})`);
-              }
-            } catch {
-              onSaveError?.(`Save failed (${res.status})`);
-            }
-            console.error('Save failed:', res.status, errText);
-            onAutoSaved('', []);
           }
+        } catch (err) {
+          console.error('Auto-save error:', err);
+          onAutoSaved(currentArticleId || '', []);
         }
-      } catch (err) {
-        console.error('Auto-save error:', err);
-        onAutoSaved(currentArticleId || '', []);
-      }
-    };
+      };
 
       autoSave();
-    }, 200); // Small delay for state consistency
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [shouldAutoSave, currentContent, currentKeywords, currentStyle, onAutoSaved, fetchArticles, currentArticleId]);
@@ -245,7 +216,7 @@ export function ArticleHistory({
       <CardContent>
         {savedToast && (
           <div className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400">
-            ✓ {t.autoSaved}
+            {t.autoSaved}
           </div>
         )}
 
@@ -255,16 +226,12 @@ export function ArticleHistory({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            <span className="text-xs text-gray-400">{(t as any).loading || '加载中...'}</span>
           </div>
         ) : blobError ? (
           <div className="py-4 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">⚠️ 存储未配置</p>
-            <p className="text-[11px] text-amber-600 dark:text-amber-500 leading-relaxed">
-              本地开发需在 .env 中配置 BLOB_PROJECT_ID 和 BLOB_TOKEN 才能使用文章历史功能。
-            </p>
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">{t.blobNotConfigured}</p>
             <a href="https://cloud.tencent.com/document/product/1552/131425" target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-700 dark:text-amber-400 underline mt-1 inline-block hover:text-amber-800">
-              查看环境变量获取方式 →
+              {t.blobDocLink} &rarr;
             </a>
           </div>
         ) : articles.length === 0 ? (
@@ -293,14 +260,12 @@ export function ArticleHistory({
                     </p>
                     <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                       <span>{new Date(article.createdAt).toLocaleDateString()}</span>
-                      <span>·</span>
+                      <span>&middot;</span>
                       <span>{article.wordCount} {t.characters}</span>
                       {article.versions && article.versions.length > 1 && (
                         <>
-                          <span>·</span>
-                          <span className="text-brand-600 dark:text-brand-400">
-                            v{article.versions.length}
-                          </span>
+                          <span>&middot;</span>
+                          <span className="text-brand-600 dark:text-brand-400">v{article.versions.length}</span>
                         </>
                       )}
                     </div>

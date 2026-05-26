@@ -57,11 +57,11 @@ export default function Home() {
   const [style, setStyle] = useState("");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [tokenUsage, setTokenUsage] = useState({ input: 0, output: 0 });
-  const [stepTokens, setStepTokens] = useState<Record<string, number>>({});  // per-step token tracking
+  const [stepTokens, setStepTokens] = useState<Record<string, number>>({});
   const [shouldAutoSave, setShouldAutoSave] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
 
-  // Stable conversation ID for this session (used by stop/abort)
+  // Stable conversation ID for this session
   const conversationId = useMemo(() => crypto.randomUUID(), []);
 
   // Version management state
@@ -71,12 +71,12 @@ export default function Home() {
   const [isLoadingArticle, setIsLoadingArticle] = useState(false);
   const [refinedSectionIndex, setRefinedSectionIndex] = useState<number | null>(null);
 
-  // Outline state (human-in-the-loop)
+  // Outline state
   const [outline, setOutline] = useState<any | null>(null);
   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
   const [pendingParams, setPendingParams] = useState<{ topic: string; keywords: string; style: string; length: string; mode?: string } | null>(null);
 
-  // Preferences state (long-term memory)
+  // Preferences & notifications
   const [preferences, setPreferences] = useState<any>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export default function Home() {
   // Ref for triggering scroll
   const editorScrollRef = useRef<{ scrollToTop: () => void; scrollToSection: (index: number) => void } | null>(null);
 
-  // Load preferences on mount (long-term memory)
+  // Load preferences on mount
   useEffect(() => {
     fetch('/preferences', {
       method: 'POST',
@@ -120,7 +120,7 @@ export default function Home() {
 
   const handleGenerate = useCallback(
     async (params: { topic: string; keywords: string; style: string; length: string; mode?: string }) => {
-      // Step 1: Generate outline first (human-in-the-loop)
+      // Step 1: Generate outline first
       setIsGeneratingOutline(true);
       setOutline(null);
       setApiError(null);
@@ -186,7 +186,7 @@ export default function Home() {
     [updateStep, resetSteps]
   );
 
-  // Outline confirmed → start article generation
+  // Outline confirmed → start writing
   const handleOutlineConfirm = useCallback(
     (confirmedOutline: any) => {
       setOutline(null);
@@ -214,7 +214,7 @@ export default function Home() {
     }
   }, [pendingParams, updateStep]);
 
-  // Direct article generation (the actual writing step)
+  // Direct article generation
   const handleDirectGenerate = useCallback(
     async (params: { topic: string; keywords: string; style: string; length: string; mode?: string }, outlineData?: any) => {
       setIsGenerating(true);
@@ -356,7 +356,7 @@ export default function Home() {
         // Scroll to top after generation completes
         setTimeout(() => editorScrollRef.current?.scrollToTop(), 100);
 
-        // Record usage to preferences (long-term memory)
+        // Record usage to preferences
         fetch('/preferences', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -408,11 +408,8 @@ export default function Home() {
     updateStep("refine", "done");
     setRefinedSectionIndex(sectionIndex ?? null);
 
-    // After refine completes, add version to existing article (don't create new)
-    // This is handled via the article-history component's addVersion logic
     setShouldAutoSave(true);
 
-    // Scroll behavior
     setTimeout(() => {
       if (sectionIndex !== undefined && sectionIndex !== null) {
         editorScrollRef.current?.scrollToSection(sectionIndex);
@@ -454,7 +451,6 @@ export default function Home() {
   }, [versions]);
 
   const handleAutoSaved = useCallback((savedId: string, savedVersions: ArticleVersion[]) => {
-    console.log('[page] handleAutoSaved called:', savedId, 'versions:', savedVersions.length);
     setShouldAutoSave(false);
     if (savedId) {
       setCurrentArticleId(savedId);
@@ -579,7 +575,7 @@ export default function Home() {
 
           {/* Main content */}
           <main className="flex-1 min-w-0 space-y-4">
-            {/* Outline confirmation (human-in-the-loop) */}
+            {/* Outline confirmation */}
             {outline && !isGenerating && (
               <OutlineCard
                 outline={outline}

@@ -94,7 +94,6 @@ export const translations = {
     seoSuggestions: '优化建议',
     seoRunAnalysis: '分析 SEO',
     seoAnalyzing: '分析中...',
-    // Outline (human-in-the-loop)
     outlineStep: '大纲确认',
     confirmOutline: '确认并开始写作',
     regenerateOutline: '重新生成大纲',
@@ -103,7 +102,6 @@ export const translations = {
     estimatedWords: '预估字数',
     generatingOutline: '正在生成大纲...',
     outlineReady: '大纲已生成，请确认或调整',
-    // Preferences (long-term memory)
     preferences: '写作偏好',
     savedPreferences: '偏好已保存',
     suggestedKeywords: '历史关键词',
@@ -213,7 +211,6 @@ export const translations = {
     seoSuggestions: 'Suggestions',
     seoRunAnalysis: 'Analyze SEO',
     seoAnalyzing: 'Analyzing...',
-    // Outline (human-in-the-loop)
     outlineStep: 'Outline Review',
     confirmOutline: 'Confirm & Start Writing',
     regenerateOutline: 'Regenerate Outline',
@@ -222,7 +219,6 @@ export const translations = {
     estimatedWords: 'Estimated words',
     generatingOutline: 'Generating outline...',
     outlineReady: 'Outline ready - review and confirm',
-    // Preferences (long-term memory)
     preferences: 'Writing Preferences',
     savedPreferences: 'Preferences saved',
     suggestedKeywords: 'Recent keywords',

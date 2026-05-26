@@ -40,7 +40,6 @@ export async function onRequest(context: any) {
         const m = await createModel(getAgentEnv(env), { timeout: 60_000 });
         const a = getAgent(m);
 
-        logger.log("Calling invoke (no tools, no streaming)...");
         const result = await a.invoke(
             { messages: [{ role: "user", content: message }] },
         );
@@ -48,16 +47,15 @@ export async function onRequest(context: any) {
         const reply = messages[messages.length - 1].content;
         logger.log("Reply:", reply);
 
-        return new Response(JSON.stringify({ status: "ok", model: process.env.AI_MODEL || "@Pages/deepseek-v4-flash", reply }), {
+        return new Response(JSON.stringify({ status: "ok", reply }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
         });
     } catch (e: any) {
         logger.error("Error:", e.message);
-        return new Response(JSON.stringify({ status: "error", model: process.env.AI_MODEL || "@Pages/deepseek-v4-flash", error: e.message }), {
+        return new Response(JSON.stringify({ status: "error", error: e.message }), {
             status: 500,
             headers: { "Content-Type": "application/json" },
         });
     }
 }
-

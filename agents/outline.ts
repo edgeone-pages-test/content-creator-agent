@@ -1,10 +1,6 @@
 /**
- * Outline Generation Agent (Human-in-the-Loop)
- *
- * Generates a structured article outline that the user can review,
- * edit, and confirm before proceeding to full article generation.
- * This implements the "human-in-the-loop" pattern from deepagents:
- * the agent proposes a plan, the human approves/modifies it.
+ * Outline Generation Agent
+ * Generates a structured article outline for user review before writing.
  */
 import { initChatModel } from 'langchain';
 import { HumanMessage } from '@langchain/core/messages';

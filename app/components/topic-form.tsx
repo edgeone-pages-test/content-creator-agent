@@ -28,12 +28,11 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
   const [length, setLength] = useState("medium");
   const [mode, setMode] = useState<"deepagent" | "lite">("lite");
 
-  // AI keyword suggestion state
+  // AI keyword suggestion
   const [suggestedKeywords, setSuggestedKeywords] = useState("");
   const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
   const lastSuggestedTopic = useRef("");
 
-  // Apply preferences (long-term memory) when loaded
   useEffect(() => {
     if (preferences) {
       if (preferences.defaultStyle) setStyle(preferences.defaultStyle);
@@ -41,7 +40,6 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
     }
   }, [preferences]);
 
-  // Fetch keyword suggestions when topic loses focus
   const handleTopicBlur = useCallback(() => {
     const trimmed = topic.trim();
     if (!trimmed || keywords.trim() || trimmed === lastSuggestedTopic.current) return;
@@ -57,15 +55,12 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
     })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.keywords) {
-          setSuggestedKeywords(data.keywords);
-        }
+        if (data?.keywords) setSuggestedKeywords(data.keywords);
       })
       .catch(() => {})
       .finally(() => setIsLoadingKeywords(false));
   }, [topic, keywords]);
 
-  // Accept the AI suggestion
   const handleAcceptSuggestion = useCallback(() => {
     if (suggestedKeywords) {
       setKeywords(suggestedKeywords);
@@ -73,13 +68,10 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
     }
   }, [suggestedKeywords]);
 
-  // Clear suggestion when user types keywords manually
   const handleKeywordsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setKeywords(e.target.value);
-    if (e.target.value && suggestedKeywords) {
-      setSuggestedKeywords("");
-    }
-  }, [suggestedKeywords]);
+    if (e.target.value) setSuggestedKeywords("");
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,11 +109,10 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
             onChange={handleKeywordsChange}
             disabled={isGenerating}
             suggestion={suggestedKeywords}
-            suggestionHint={(t as any).keywordSuggestionHint || '填入建议'}
+            suggestionHint={(t as any).keywordSuggestionHint}
             onAcceptSuggestion={handleAcceptSuggestion}
           />
 
-          {/* Loading indicator for keyword suggestion */}
           {isLoadingKeywords && (
             <div className="flex items-center gap-1.5 -mt-2">
               <div className="flex gap-0.5">
@@ -129,11 +120,10 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
                 <span className="h-1 w-1 rounded-full bg-brand-400 animate-bounce [animation-delay:150ms]" />
                 <span className="h-1 w-1 rounded-full bg-brand-400 animate-bounce [animation-delay:300ms]" />
               </div>
-              <span className="text-[10px] text-gray-400">{(t as any).suggestingKeywords || '正在生成建议关键词...'}</span>
+              <span className="text-[10px] text-gray-400">{(t as any).suggestingKeywords}</span>
             </div>
           )}
 
-          {/* Keyword suggestions from long-term memory */}
           {preferences?.recentKeywords && preferences.recentKeywords.length > 0 && !keywords && !suggestedKeywords && (
             <div className="flex flex-wrap gap-1 -mt-2">
               {preferences.recentKeywords.slice(0, 6).map((kw: string, i: number) => (
@@ -176,7 +166,6 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
             ]}
           />
 
-          {/* Mode toggle */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {(t as any).agentMode || '生成模式'}

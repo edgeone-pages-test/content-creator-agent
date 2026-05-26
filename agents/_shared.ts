@@ -6,14 +6,14 @@ import { initChatModel } from 'langchain';
 
 type Model = Awaited<ReturnType<typeof initChatModel>>;
 
+const MODEL_NAME = '@Pages/deepseek-v4-flash';
+
 export interface AgentEnv {
     AI_GATEWAY_API_KEY: string;
     AI_GATEWAY_BASE_URL: string;
 }
 
-/**
- * Extract and validate required environment variables.
- */
+/** Extract and validate required environment variables. */
 export function getAgentEnv(contextEnv: Record<string, string | undefined> | undefined): AgentEnv {
     const source = contextEnv ?? {};
     const required = ['AI_GATEWAY_API_KEY', 'AI_GATEWAY_BASE_URL'] as const;
@@ -25,21 +25,17 @@ export function getAgentEnv(contextEnv: Record<string, string | undefined> | und
     };
 }
 
-/**
- * Initialize a chat model with standard configuration.
- * Caches per model name to avoid re-initialization.
- */
+/** Initialize a chat model. Caches per base URL to avoid re-initialization. */
 const modelCache = new Map<string, Model>();
 
 export async function createModel(env: AgentEnv, options?: { timeout?: number }): Promise<Model> {
-    const modelName = process.env.AI_MODEL || '@Pages/deepseek-v4-flash';
-    const cacheKey = `${modelName}:${env.AI_GATEWAY_BASE_URL}`;
+    const cacheKey = `${MODEL_NAME}:${env.AI_GATEWAY_BASE_URL}`;
 
     if (modelCache.has(cacheKey)) {
         return modelCache.get(cacheKey)!;
     }
 
-    const model = await initChatModel(modelName, {
+    const model = await initChatModel(MODEL_NAME, {
         modelProvider: 'openai',
         apiKey: env.AI_GATEWAY_API_KEY,
         configuration: {
@@ -52,12 +48,10 @@ export async function createModel(env: AgentEnv, options?: { timeout?: number })
     return model;
 }
 
-/**
- * Create a logger with a consistent prefix.
- */
+/** Create a logger with a consistent prefix. */
 export function createLogger(name: string) {
     return {
-        log(...args: unknown[]) { console.log(`[${name}][${new Date().toISOString()}]`, ...args); },
-        error(...args: unknown[]) { console.error(`[${name}][${new Date().toISOString()}]`, ...args); },
+        log(...args: unknown[]) { console.log(`[${name}]`, ...args); },
+        error(...args: unknown[]) { console.error(`[${name}]`, ...args); },
     };
 }

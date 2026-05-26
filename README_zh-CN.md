@@ -84,7 +84,6 @@ cp .env.example .env
 ```env
 AI_GATEWAY_API_KEY=your-api-key
 AI_GATEWAY_BASE_URL=your-gateway-url
-AI_MODEL=@Pages/deepseek-v4-flash
 ```
 
 ### 3. 本地开发
@@ -150,9 +149,9 @@ error_message — 错误信息
 ping          — 心跳保活
 ```
 
-## 可用模型
+## 使用模型
 
-通过 `AI_MODEL` 环境变量配置：
+默认使用 `@Pages/deepseek-v4-flash`，如需更换请修改 `agents/_shared.ts` 中的 `MODEL_NAME` 常量。
 
 | 模型 | 推荐场景 |
 |------|---------|

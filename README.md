@@ -135,11 +135,12 @@ ping          — Heartbeat keepalive
 |----------|----------|-------------|
 | `AI_GATEWAY_API_KEY` | Yes | AI Gateway API Key |
 | `AI_GATEWAY_BASE_URL` | Yes | AI Gateway Base URL |
-| `AI_MODEL` | No | Model name (default: `@Pages/deepseek-v4-flash`) |
 | `PROJECT_ID` | No | Pages project ID (auto-injected on deploy) |
 | `EDGEONE_PAGES_API_TOKEN` | No | API token (auto-injected on deploy) |
 
 ## Recommended Models
+
+Default: `@Pages/deepseek-v4-flash`. To change, update the `MODEL_NAME` constant in `agents/_shared.ts`.
 
 | Model | Best For |
 |-------|---------|

@@ -3,8 +3,11 @@ import { cn } from '@/lib/utils';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  /** Ghost text shown when input is empty (AI suggestion) */
   suggestion?: string;
+  /** Hint text next to the Tab badge */
   suggestionHint?: string;
+  /** Called when user presses Tab to accept suggestion */
   onAcceptSuggestion?: () => void;
 }
 
@@ -18,6 +21,8 @@ export function Input({ className, label, id, suggestion, suggestionHint, onAcce
     }
     onKeyDown?.(e);
   }, [suggestion, onAcceptSuggestion, onKeyDown, props.value]);
+
+  const showSuggestion = suggestion && !props.value;
 
   return (
     <div className="space-y-1.5">
@@ -37,24 +42,24 @@ export function Input({ className, label, id, suggestion, suggestionHint, onAcce
           onKeyDown={handleKeyDown}
           onFocus={onFocus}
           {...props}
-          placeholder={suggestion && !props.value ? '' : props.placeholder}
+          placeholder={showSuggestion ? '' : props.placeholder}
         />
-        {/* Ghost text suggestion overlay */}
-        {suggestion && !props.value && (
-          <div className="pointer-events-none absolute inset-0 flex items-center px-3">
-            <span className="text-sm text-gray-300 dark:text-gray-600 truncate">
-              {suggestion}
-            </span>
-          </div>
-        )}
-        {/* Hint badge */}
-        {suggestion && !props.value && suggestionHint && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-            <span className="inline-flex items-center gap-1 rounded bg-brand-50 dark:bg-brand-900/30 px-1.5 py-0.5 text-[10px] font-medium text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
-              <kbd className="font-mono text-[9px] bg-white dark:bg-gray-800 rounded px-0.5 border border-gray-200 dark:border-gray-700">Tab</kbd>
-              {suggestionHint}
-            </span>
-          </div>
+        {showSuggestion && (
+          <>
+            <div className="pointer-events-none absolute inset-0 flex items-center px-3">
+              <span className="text-sm text-gray-300 dark:text-gray-600 truncate">
+                {suggestion}
+              </span>
+            </div>
+            {suggestionHint && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                <span className="inline-flex items-center gap-1 rounded bg-brand-50 dark:bg-brand-900/30 px-1.5 py-0.5 text-[10px] font-medium text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
+                  <kbd className="font-mono text-[9px] bg-white dark:bg-gray-800 rounded px-0.5 border border-gray-200 dark:border-gray-700">Tab</kbd>
+                  {suggestionHint}
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

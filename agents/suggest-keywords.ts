@@ -1,8 +1,6 @@
 /**
  * Keyword Suggestion Agent
- *
- * Given an article topic, suggests relevant SEO keywords using LLM.
- * Called automatically when the user blurs the topic input field.
+ * Given a topic, suggests relevant SEO keywords via LLM.
  */
 import { HumanMessage } from '@langchain/core/messages';
 import { getAgentEnv, createModel, createLogger } from './_shared';
@@ -31,11 +29,11 @@ export async function onRequest(context: any) {
 
     try {
         const envVars = getAgentEnv(env);
-        const modelInstance = await createModel(envVars, { timeout: 30_000 });
+        const model = await createModel(envVars, { timeout: 30_000 });
 
-        logger.log(`Suggesting keywords for topic: "${topic}"`);
+        logger.log(`Suggesting keywords for: "${topic}"`);
 
-        const response = await modelInstance.invoke([
+        const response = await model.invoke([
             { role: 'system', content: SYSTEM_PROMPT },
             new HumanMessage(`Topic: "${topic}"`),
         ]);
@@ -47,10 +45,8 @@ export async function onRequest(context: any) {
                 ? rawContent.map((c: any) => typeof c === 'string' ? c : c.text || '').join('')
                 : String(rawContent || '');
 
-        // Clean up: remove any quotes, trim whitespace
         const keywords = text.replace(/^["']|["']$/g, '').trim();
-
-        logger.log(`Suggested keywords: "${keywords}"`);
+        logger.log(`Suggested: "${keywords}"`);
 
         return new Response(JSON.stringify({ keywords }), {
             status: 200,
