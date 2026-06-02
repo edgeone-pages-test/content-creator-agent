@@ -582,6 +582,7 @@ export default function Home() {
               isGenerating={isGenerating}
               isRefining={isRefining}
               isLoadingArticle={isLoadingArticle}
+              hasOutline={!!outline}
               versions={versions}
               currentVersionIndex={currentVersionIndex}
               onVersionSwitch={handleVersionSwitch}

@@ -18,6 +18,7 @@ interface ArticleEditorProps {
   isGenerating: boolean;
   isRefining?: boolean;
   isLoadingArticle?: boolean;
+  hasOutline?: boolean;
   versions?: ArticleVersion[];
   currentVersionIndex?: number;
   onVersionSwitch?: (index: number) => void;
@@ -30,6 +31,7 @@ export function ArticleEditor({
   isGenerating,
   isRefining = false,
   isLoadingArticle = false,
+  hasOutline = false,
   versions = [],
   currentVersionIndex = 0,
   onVersionSwitch,
@@ -95,6 +97,7 @@ export function ArticleEditor({
   }, [content]);
 
   if (!content && !isGenerating) {
+    if (hasOutline) return null;
     return (
       <Card className="flex min-h-[600px] items-center justify-center">
         <div className="text-center px-8">
