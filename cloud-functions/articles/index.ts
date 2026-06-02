@@ -1,7 +1,13 @@
-const logger = {
-    log(...args: unknown[]) { console.log(`[articles][${new Date().toISOString()}]`, ...args); },
-    error(...args: unknown[]) { console.error(`[articles][${new Date().toISOString()}]`, ...args); },
-};
+/**
+ * Articles CRUD — EdgeOne Pages Node Function
+ * File path cloud-functions/articles/index.ts maps to POST /articles
+ *
+ * Handles article persistence via context.store message API.
+ * Actions: list | save | addVersion | get | delete
+ */
+import { createLogger } from '../_logger';
+
+const logger = createLogger('articles');
 
 interface ArticleVersion {
     content: string;
@@ -79,9 +85,12 @@ function createResponse(data: any, status = 200) {
     });
 }
 
-export async function onRequest(context: any) {
-    const { request, store } = context;
-    const body = request?.body ?? {};
+export async function onRequestPost(context: any) {
+    const store = context.store ?? context.agent?.store ?? null;
+
+    let body: Record<string, any> = {};
+    try { body = await context.request.json(); } catch {}
+
     const { action } = body;
 
     if (!store) {

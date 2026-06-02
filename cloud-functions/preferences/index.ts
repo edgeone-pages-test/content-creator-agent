@@ -1,8 +1,11 @@
 /**
- * User Preferences Agent (Long-term Memory)
- * Uses context.store for persistent preference storage across sessions.
+ * User Preferences — EdgeOne Pages Node Function
+ * File path cloud-functions/preferences/index.ts maps to POST /preferences
+ *
+ * Handles persistent preference storage via context.store message API.
+ * Actions: get | save | recordUsage
  */
-import { createLogger } from './_shared';
+import { createLogger } from '../_logger';
 
 const logger = createLogger('preferences');
 
@@ -39,19 +42,20 @@ function createResponse(data: any, status = 200) {
     });
 }
 
-export async function onRequest(context: any) {
-    const { request, store } = context;
-    const body = request?.body ?? {};
+export async function onRequestPost(context: any) {
+    const store = context.store ?? context.agent?.store ?? null;
+
+    let body: Record<string, any> = {};
+    try { body = await context.request.json(); } catch {}
+
     const { action, userId = 'default' } = body;
 
-    // context.store not available in local dev without Makers runtime
     if (!store) {
         const defaults = createDefaultPreferences(userId);
         if (action === 'get') return createResponse({ preferences: defaults });
         return createResponse({ success: true, preferences: defaults });
     }
 
-    // One conversation per user acts as a "preferences namespace"
     const conversationId = `preferences-${userId}`;
 
     try {
@@ -92,7 +96,6 @@ export async function onRequest(context: any) {
                 const { topic, keywords, style, length } = body;
                 let prefs = createDefaultPreferences(userId);
 
-                // Load existing preferences
                 try {
                     const messages = await store.getMessages({ conversationId, limit: 1, order: 'desc' });
                     if (messages.length > 0 && messages[0].content) {
@@ -102,7 +105,6 @@ export async function onRequest(context: any) {
                     }
                 } catch {}
 
-                // Update
                 if (topic) prefs.recentTopics = [topic, ...prefs.recentTopics.filter((t: string) => t !== topic)].slice(0, 10);
                 if (keywords) {
                     const newKws = keywords.split(/[,，]/).map((k: string) => k.trim()).filter(Boolean);
@@ -129,9 +131,6 @@ export async function onRequest(context: any) {
         }
     } catch (e: any) {
         const msg = e?.message || String(e);
-        // wrapStorage in the Makers runtime re-wraps blob credential errors as
-        // "Memory storage operation failed." so we catch both the original code
-        // and the wrapped message.
         const isStorageError =
             e?.code === 'CREDENTIAL_ERROR' ||
             msg.includes('credential') ||
