@@ -2,8 +2,7 @@
  * Stop active run — aborts the running generation for this conversation.
  */
 export async function onRequest(context: any) {
-  const body = context.request?.body ?? {};
-  const conversationId = body.conversation_id || context.conversation_id;
+  const conversationId = context.conversation_id;
 
   if (!conversationId) {
     return new Response(

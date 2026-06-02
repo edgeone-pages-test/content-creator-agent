@@ -17,7 +17,7 @@ RULES:
 - Do NOT output any explanation, numbering, or extra text`;
 
 export async function onRequest(context: any) {
-    const { request, env } = context;
+    const { request, env, conversation_id: conversationId } = context;
     const { topic } = request?.body ?? {};
 
     if (!topic?.trim()) {
@@ -31,7 +31,7 @@ export async function onRequest(context: any) {
         const envVars = getAgentEnv(env);
         const model = await createModel(envVars, { timeout: 30_000 });
 
-        logger.log(`Suggesting keywords for: "${topic}"`);
+        logger.log(`Suggesting keywords for: "${topic}" (conversation: ${conversationId || 'none'})`);
 
         const response = await model.invoke([
             { role: 'system', content: SYSTEM_PROMPT },

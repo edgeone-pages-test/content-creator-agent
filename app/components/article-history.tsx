@@ -57,15 +57,13 @@ export function ArticleHistory({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'list' }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.error === 'BLOB_NOT_CONFIGURED') {
-          setBlobError(data.message);
-          setArticles([]);
-        } else {
-          setBlobError(null);
-          setArticles(data.articles || []);
-        }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.error === 'BLOB_NOT_CONFIGURED') {
+        setBlobError('BLOB_NOT_CONFIGURED');
+        setArticles([]);
+      } else {
+        setBlobError(null);
+        setArticles(data?.articles || []);
       }
     } catch {
       // silently fail
@@ -97,14 +95,18 @@ export function ArticleHistory({
 
             if (!res.ok) {
               const errData = await res.json().catch(() => null);
-              onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              if (errData?.error === 'BLOB_NOT_CONFIGURED') {
+                setBlobError('BLOB_NOT_CONFIGURED');
+              } else {
+                onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              }
               onAutoSaved(currentArticleId, []);
               return;
             }
 
             const data = await res.json();
             if (data.error === 'BLOB_NOT_CONFIGURED') {
-              onSaveError?.(data.message || 'Blob storage is not configured.');
+              setBlobError('BLOB_NOT_CONFIGURED');
               onAutoSaved(currentArticleId, []);
               return;
             }
@@ -136,14 +138,18 @@ export function ArticleHistory({
 
             if (!res.ok) {
               const errData = await res.json().catch(() => null);
-              onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              if (errData?.error === 'BLOB_NOT_CONFIGURED') {
+                setBlobError('BLOB_NOT_CONFIGURED');
+              } else {
+                onSaveError?.(errData?.message || `Save failed (${res.status})`);
+              }
               onAutoSaved('', []);
               return;
             }
 
             const data = await res.json();
             if (data.error === 'BLOB_NOT_CONFIGURED') {
-              onSaveError?.(data.message || 'Blob storage is not configured.');
+              setBlobError('BLOB_NOT_CONFIGURED');
               onAutoSaved('', []);
               return;
             }

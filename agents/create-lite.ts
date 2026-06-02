@@ -12,6 +12,20 @@ type Model = Awaited<ReturnType<typeof initChatModel>>;
 
 const logger = createLogger('create-lite');
 
+/**
+ * Strip DSML/tool-call markup that sometimes leaks into model output.
+ * Handles both the standard XML variant and the ｜｜DSML｜｜ full-width-pipe variant.
+ */
+function stripDSML(text: string): string {
+    return text
+        // Full-width pipe variant: <｜｜DSML｜｜invoke>, </｜｜DSML｜｜tool_calls>, …
+        .replace(/<\/?｜｜DSML｜｜[^>]*>/g, '')
+        // ASCII pipe variant: <||DSML||invoke>
+        .replace(/<\/?[|][|]DSML[|][|][^>]*>/g, '')
+        // Standard XML DSML tags
+        .replace(/<\/?(tool_calls|invoke|parameter)[^>]*>/g, '');
+}
+
 const SYSTEM_PROMPT = `You are a professional content creator. Today's date is ${new Date().toISOString().slice(0, 10)}.
 
 WORKFLOW:
@@ -121,7 +135,7 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                     // Phase 1 (pre-search): never stream — content may be DSML/thinking text.
                     // Phase 2 (post-search): stream the actual article content.
                     if (searchDone) {
-                        const cleaned = msg.text.replace(/\n{3,}/g, '\n\n');
+                        const cleaned = stripDSML(msg.text).replace(/\n{3,}/g, '\n\n');
                         if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
                     }
                 }
@@ -132,7 +146,8 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                     // Phase 1 produced text but no tool calls — could be DSML or the model
                     // skipped searching. Treat the full content as the article if it looks
                     // substantive; otherwise discard and retry without tools.
-                    const hasDSML = fullContent.includes('<tool_calls>') || fullContent.includes('<invoke') || fullContent.includes('<parameter');
+                    const hasDSML = fullContent.includes('<tool_calls>') || fullContent.includes('<invoke') || fullContent.includes('<parameter')
+                        || fullContent.includes('｜｜DSML｜｜') || fullContent.includes('||DSML||');
                     if (hasDSML) {
                         // DSML detected: extract queries from XML and run the searches manually,
                         // then retry writing without tools (searchDone = true).
@@ -166,7 +181,7 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                         continue;
                     }
                     // Model wrote the article without searching — stream it now
-                    const cleaned = fullContent.replace(/\n{3,}/g, '\n\n');
+                    const cleaned = stripDSML(fullContent).replace(/\n{3,}/g, '\n\n');
                     if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
                 }
                 break;

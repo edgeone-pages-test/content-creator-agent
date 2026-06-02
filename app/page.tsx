@@ -387,7 +387,7 @@ export default function Home() {
         "Content-Type": "application/json",
         "pages-agent-conversation-id": conversationId,
       },
-      body: JSON.stringify({ conversation_id: conversationId }),
+      body: JSON.stringify({}),
     }).catch(() => {});
   }, [abortController, conversationId]);
 
