@@ -1,174 +1,121 @@
-# Content Creator - EdgeOne Makers Agent Template
+# Content Creator
 
-AI-powered content creation assistant with real web search, outline generation, article writing, SEO analysis, and version management.
+**Language:** English | [简体中文](./README_zh-CN.md)
 
-Built on [EdgeOne Makers](https://edgeone.ai/makers) + [DeepAgents](https://github.com/langchain-ai/deepagents) + [LangChain](https://js.langchain.com/).
+AI-powered content creation assistant with real web search, outline generation, article writing, SEO analysis, and version management. Built on DeepAgents + LangChain and deployed on EdgeOne Makers.
 
-## Deploy
-[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/makers/new?template=content-creator-agent&from=within&fromAgent=1&agentLang=typescript)
+**Framework:** None (raw Node.js) · **Category:** Content · **Language:** TypeScript
 
-## Features
+[![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/makers/new?template=content-creator-edgeone&from=within&fromAgent=1&agentLang=typescript)
 
-### Core Writing Pipeline
-- **Topic Research** — Real web search via `context.tools.web_search` for up-to-date references
-- **AI Keyword Suggestions** — Auto-suggest SEO keywords when topic is entered (Tab to accept)
-- **Outline Generation (HITL)** — AI generates outline, user reviews and edits before writing
-- **Streaming Writing** — SSE real-time streaming output
-- **Section Refinement** — Select specific paragraphs for precise editing
-- **SEO Analysis** — Keyword density, readability score, heading structure, optimization suggestions
+<!-- TODO: confirm -->
+![preview](./assets/preview.png)
 
-### Agent Features
-- **Dual Mode Generation** — Lite mode (low token) and DeepAgent mode (full framework) switchable
-- **Human-in-the-Loop** — Outline confirmation flow, user approves AI planning before execution
-- **Long-term Memory** — User writing preferences persisted via Pages Memory API
-- **Real Web Search** — Powered by `@edgeone/pages-agent-toolkit` `web_search` tool
-- **Sub-agent Pipeline** — Research → Outline → Writing → SEO multi-stage agent collaboration
+## Overview
 
-### Other
-- **Version Management** — Auto-save versions on each edit, support history rollback
-- **Article History** — Blob storage persistence across sessions
-- **Export** — Markdown, HTML, plain text copy and .md file download
-- **Bilingual Support** — Chinese / English toggle
-- **Token Tracking** — Per-stage token consumption statistics
-- **Toast Notifications** — Top-right error/success notifications for save failures etc.
+This template streamlines long-form content creation from topic to publishable article. It researches topics via live web search, generates structured outlines for human review, writes full articles in either a lightweight or deep-agent mode, and provides SEO scoring and section-level refinement. All article versions and user preferences are persisted across sessions.
 
-## Project Structure
-
-```
-content-creator-edgeone/
-├── agents/                     # EdgeOne Cloud Functions
-│   ├── _shared.ts              # Shared: model init, env vars, logger
-│   ├── create.ts               # DeepAgent mode — full agent framework
-│   ├── create-lite.ts          # Lite mode — manual Agent Loop, low token
-│   ├── outline.ts              # Outline generation (HITL)
-│   ├── suggest-keywords.ts     # AI keyword suggestion from topic
-│   ├── refine.ts               # Article refinement (full/section)
-│   ├── optimize.ts             # SEO optimization
-│   ├── research.ts             # Standalone research agent
-│   ├── articles.ts             # Article CRUD + version management (Blob)
-│   ├── preferences.ts          # User preferences (Pages Memory / Blob)
-│   ├── health.ts               # Health check
-│   ├── stop.ts                 # Cancel generation
-│   └── test.ts                 # Model connectivity test
-├── app/                        # Next.js App Router
-│   ├── page.tsx                # Main page + multi-step orchestration
-│   └── components/
-│       ├── topic-form.tsx      # Input form + AI keyword suggestion + mode switch
-│       ├── article-editor.tsx  # Editor + version switch
-│       ├── outline-card.tsx    # Outline confirm/edit (sticky action bar)
-│       ├── refine-bar.tsx      # Section selection + refine instructions
-│       ├── article-stats.tsx   # Word count, paragraphs, reading time
-│       ├── seo-panel.tsx       # SEO analysis panel
-│       ├── article-history.tsx # Article history list + auto-save
-│       ├── export-panel.tsx    # Export functionality
-│       ├── process-steps.tsx   # Workflow progress visualization
-│       └── research-results.tsx # Search results display
-├── lib/
-│   ├── i18n.tsx                # i18n (Chinese/English)
-│   └── utils.ts
-├── components/ui/              # Base UI components (Input with ghost text, etc.)
-├── edgeone.json                # EdgeOne deployment config
-└── .env.example                # Environment variable template
-```
-
-## Quick Start
-
-```bash
-# Install dependencies
-npm install
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your AI Gateway credentials
-
-# Local development
-edgeone makers dev
-```
-
-Visit http://localhost:8088
-
-## Dual Mode Architecture
-
-### Lite Mode (Default)
-
-```
-User input → /outline (outline) → user confirms → /create-lite (write) → article
-```
-
-- Uses `model.bindTools()` + manual Agent Loop
-- Single tool (`web_search` via `context.tools`), removed after search to force text output
-- Token usage: ~12-15k / article
-
-### DeepAgent Mode
-
-```
-User input → /outline (outline) → user confirms → /create (write) → article
-```
-
-- Uses manual agent loop with memory layer
-- Includes user preference persistence and structured prompts
-- Real web search via `context.tools.web_search`
-- Token usage: ~20-30k / article
-
-## API Endpoints
-
-| Endpoint | Method | Description | Response |
-|----------|--------|-------------|----------|
-| `/outline` | POST | Generate article outline | JSON |
-| `/create` | POST | DeepAgent mode creation | SSE |
-| `/create-lite` | POST | Lite mode creation | SSE |
-| `/suggest-keywords` | POST | AI keyword suggestions from topic | JSON |
-| `/refine` | POST | Refine article (full/section) | SSE |
-| `/optimize` | POST | SEO analysis | JSON |
-| `/research` | POST | Standalone research | SSE |
-| `/articles` | POST | Article CRUD + versioning | JSON |
-| `/preferences` | POST | User preferences read/write | JSON |
-| `/health` | GET | Health check | JSON |
-| `/test` | POST | Model connectivity test | JSON |
-
-### SSE Event Types
-
-```
-ai_response   — Article text content (streaming)
-tool_call     — Tool call start
-tool_result   — Tool call result
-usage         — Token consumption stats
-error_message — Error message
-ping          — Heartbeat keepalive
-```
+- **Research-Driven Writing** — Uses real web search to gather up-to-date references before drafting.
+- **Human-in-the-Loop Outlines** — The AI generates a structured outline; the user reviews and edits it before the writing phase begins.
+- **Dual Generation Modes** — Lite mode (low-token manual tool loop) for speed, or DeepAgent mode (full framework with memory) for richer personalization.
+- **SEO & Refinement** — Automated keyword-density, readability, and heading-structure analysis; refine individual sections or the full article on demand.
+- **Version Management** — Articles and user preferences are persisted to Blob storage, enabling history rollback and cross-session continuity.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AI_GATEWAY_API_KEY` | Yes | AI Gateway API Key |
-| `AI_GATEWAY_BASE_URL` | Yes | AI Gateway Base URL |
-| `PROJECT_ID` | No | Makers project ID (auto-injected on deploy) |
-| `EDGEONE_PAGES_API_TOKEN` | No | API token (auto-injected on deploy) |
+| `AI_GATEWAY_API_KEY` | Yes | Model gateway API key. Use your Makers Models API Key, or any OpenAI-compatible provider key. |
+| `AI_GATEWAY_BASE_URL` | Yes | Gateway base URL. For Makers Models, use `https://ai-gateway.edgeone.link/v1`. |
+| `BLOB_PROJECT_ID` | No | Pages project ID for Blob storage (article history & preferences). |
+| `BLOB_TOKEN` | No | API token for Blob storage. |
 
-## Recommended Models
+This template follows the OpenAI-compatible standard — point these at Makers Models or any compatible provider.
 
-Default: `@makers/deepseek-v4-flash`. To change, update the `MODEL_NAME` constant in `agents/_shared.ts`.
+### How to get AI_GATEWAY_API_KEY
 
-| Model | Best For |
-|-------|---------|
-| `@makers/deepseek-v4-flash` | **Recommended** — Fast, good instruction following |
-| `@makers/minimax-m2.7` | General purpose |
-| `@makers/hy3-preview` | General purpose |
+1. Open the Makers Console (https://console.cloud.tencent.com/edgeone/makers)
+2. Sign in and enable Makers
+3. Go to Makers → Models → API Key and create a key
+4. Copy it into `AI_GATEWAY_API_KEY`
 
-## Tech Stack
+> Built-in models are free within quota and great for validation. For production, bind your own paid provider key (BYOK).
 
-- **Frontend**: Next.js 16 + React 19 + Tailwind CSS 4
-- **Agent**: [deepagents](https://github.com/langchain-ai/deepagents) + [langchain](https://js.langchain.com/)
-- **Tools**: [@edgeone/pages-agent-toolkit](https://www.npmjs.com/package/@edgeone/pages-agent-toolkit) (`web_search`)
-- **Storage**: [@edgeone/pages-blob](https://www.npmjs.com/package/@edgeone/pages-blob) (articles) + Pages Memory API (preferences)
-- **Deployment**: [EdgeOne Makers](https://edgeone.ai/makers)
+## Local Development
 
-## Deployment
+**Prerequisites**
+- Node.js 18+
+- EdgeOne CLI (`npm i -g @edgeone/cli`)
 
 ```bash
-edgeone makers deploy
+npm install
+cp .env.example .env
+# Edit .env with your AI_GATEWAY_API_KEY and AI_GATEWAY_BASE_URL
+edgeone makers dev
 ```
+
+Open the local observability dashboard at http://localhost:8080/agent-metrics.
+
+## Project Structure
+
+```
+content-creator-edgeone/
+├── agents/
+│   ├── _shared.ts              # Model init, env validation, logger
+│   ├── create.ts               # POST /create — DeepAgent mode writing (SSE)
+│   ├── create-lite.ts          # POST /create-lite — Lite mode writing (SSE)
+│   ├── outline.ts              # POST /outline — structured outline generation (JSON)
+│   ├── optimize.ts             # POST /optimize — SEO analysis (JSON)
+│   ├── refine.ts               # POST /refine — article editing (SSE)
+│   ├── research.ts             # POST /research — standalone research agent (SSE)
+│   ├── stop.ts                 # POST /stop — abort active run
+│   ├── suggest-keywords.ts     # POST /suggest-keywords — keyword suggestions (JSON)
+│   └── test.ts                 # POST /test — model connectivity test
+├── cloud-functions/
+│   ├── articles/               # POST /articles — article CRUD + versioning
+│   ├── health/                 # GET /health
+│   └── preferences/            # POST /preferences — user preferences read/write
+├── app/                        # Next.js App Router frontend
+├── components/                 # UI components (editor, SEO panel, history, export)
+├── lib/
+│   └── i18n.tsx                # Chinese / English translations
+└── edgeone.json                # EdgeOne deployment config
+```
+
+Files prefixed with `_` are private modules — not exposed as public routes.
+
+## How It Works
+
+### Runtime Mode
+Agents under `agents/` run as **stateless HTTP handlers** by default. The writing endpoints (`/create`, `/create-lite`, `/refine`, `/research`) return Server-Sent Events (SSE) for real-time streaming. Outline, optimization, and keyword endpoints return JSON directly.
+
+### End-to-End Workflow
+
+1. **Topic input** — The user enters a topic; the frontend calls `/suggest-keywords` to get SEO keyword ideas.
+2. **Outline generation** — The frontend calls `/outline` with the topic, keywords, style, and target length. The agent returns a structured JSON outline (title, sections, key points, word counts).
+3. **Human review** — The user edits the outline in the UI and confirms.
+4. **Article writing** —
+   - **Lite mode** (`/create-lite`): a lightweight `bindTools` loop calls `search_web` once, then streams the full article with minimal token overhead.
+   - **DeepAgent mode** (`/create`): a full DeepAgent loop with user memory (style, length, tone preferences) and structured system prompts for richer output.
+5. **SEO analysis** — After writing, the frontend calls `/optimize` to score keyword density, readability, and heading structure.
+6. **Refinement** — The user selects a section or the full article and calls `/refine` with an instruction; the agent streams the updated text.
+7. **Persistence** — Article versions are saved to Blob via `/articles`; user preferences are persisted via `/preferences`.
+
+### Key Routes & Parameters
+- `/outline` — Accepts `{ topic, keywords, style, length }`, returns `{ outline, usage }`.
+- `/create` and `/create-lite` — Accept `{ message, topic, keywords, style, length, outline }`, stream `ai_response`, `tool_call`, `tool_result`, and `usage` events.
+- `/refine` — Accepts `{ article, instruction, section }`, streams updated text.
+- `/optimize` — Accepts `{ content, keywords }`, returns SEO JSON.
+- `/stop` — Cancels the active SSE stream for a conversation.
+
+### Timeouts
+No custom agent timeout is configured; the platform default applies.
+
+## Resources
+
+- [Makers Agents Documentation](https://edgeone.ai/makers)
+- [Makers Quick Start](https://edgeone.ai/makers/docs/quickstart)
+- [Makers Models](https://console.cloud.tencent.com/edgeone/makers/models)
 
 ## License
 
