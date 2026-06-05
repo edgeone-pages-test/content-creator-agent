@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { ConversationProvider, useConversationId } from "./lib/conversation-context";
 import { TopicForm } from "./components/topic-form";
 import { ArticleEditor } from "./components/article-editor";
 import { ArticleStats } from "./components/article-stats";
@@ -34,7 +35,16 @@ export interface ArticleVersion {
 }
 
 export default function Home() {
+  return (
+    <ConversationProvider>
+      <HomeInner />
+    </ConversationProvider>
+  );
+}
+
+function HomeInner() {
   const { t } = useI18n();
+  const conversationId = useConversationId();
   const [content, setContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [steps, setSteps] = useState<Record<Step, StepStatus>>({
@@ -53,9 +63,6 @@ export default function Home() {
   const [stepTokens, setStepTokens] = useState<Record<string, number>>({});
   const [shouldAutoSave, setShouldAutoSave] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-
-  // Stable conversation ID for this session
-  const conversationId = useMemo(() => crypto.randomUUID(), []);
 
   // Version management state
   const [currentArticleId, setCurrentArticleId] = useState<string | null>(null);
@@ -135,7 +142,7 @@ export default function Home() {
       try {
         const res = await fetch('/outline', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'makers-conversation-id': conversationId },
           body: JSON.stringify(params),
         });
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const AGENT_PATHS = ['/outline', '/create', '/create-lite', '/refine', '/suggest-keywords', '/stop', '/research', '/optimize'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (!AGENT_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next();
@@ -17,7 +17,3 @@ export function middleware(request: NextRequest) {
 
   return NextResponse.next({ request: { headers: newHeaders } });
 }
-
-export const config = {
-  matcher: ['/outline', '/create', '/create-lite', '/refine', '/suggest-keywords', '/stop', '/research', '/optimize'],
-};

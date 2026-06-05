@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useConversationId } from "@/app/lib/conversation-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -22,6 +23,7 @@ interface TopicFormProps {
 
 export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: TopicFormProps) {
   const { t } = useI18n();
+  const conversationId = useConversationId();
   const [topic, setTopic] = useState("");
   const [keywords, setKeywords] = useState("");
   const [style, setStyle] = useState("informative");
@@ -50,7 +52,7 @@ export function TopicForm({ onGenerate, onStop, isGenerating, preferences }: Top
 
     fetch('/suggest-keywords', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'makers-conversation-id': conversationId },
       body: JSON.stringify({ topic: trimmed }),
     })
       .then(r => r.ok ? r.json() : null)

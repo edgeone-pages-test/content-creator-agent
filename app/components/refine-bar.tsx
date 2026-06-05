@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
+import { useConversationId } from '@/app/lib/conversation-context';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useI18n } from '@/lib/i18n';
@@ -94,6 +95,7 @@ function scrollToHeading(title: string) {
 
 export function RefineBar({ content, onRefineComplete, onRefineStart, onRefineEnd, onTokenUsage, isRefining = false }: RefineBarProps) {
   const { t } = useI18n();
+  const conversationId = useConversationId();
   const [instruction, setInstruction] = useState('');
   const [localRefining, setLocalRefining] = useState(false);
   const [selectedSection, setSelectedSection] = useState<number | null>(null);
@@ -126,7 +128,7 @@ export function RefineBar({ content, onRefineComplete, onRefineStart, onRefineEn
 
       const response = await fetch('/refine', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'makers-conversation-id': conversationId },
         body: JSON.stringify(body),
       });
 
