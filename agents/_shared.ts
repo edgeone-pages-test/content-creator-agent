@@ -1,6 +1,6 @@
 /**
  * Shared utilities for all agent endpoints.
- * Centralizes model initialization and environment config.
+ * Centralizes model initialization, environment config, and SSE helpers.
  */
 import { initChatModel } from 'langchain';
 
@@ -54,4 +54,54 @@ export function createLogger(name: string) {
         log(...args: unknown[]) { console.log(`[${name}]`, ...args); },
         error(...args: unknown[]) { console.error(`[${name}]`, ...args); },
     };
+}
+
+// ─── SSE Helpers ───
+// SOP D 段要求："Use the shared createSSEResponse helper instead of inlining a
+// ReadableStream per file"。所有 agent 端点统一走这个 helper。
+
+export function sseEvent(data: Record<string, unknown>): string {
+    return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+export function createSSEResponse(
+    generator: AsyncGenerator<string> | ((signal?: AbortSignal) => AsyncGenerator<string>),
+    signal?: AbortSignal
+): Response {
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+        async start(controller) {
+            const heartbeat = setInterval(() => {
+                try {
+                    controller.enqueue(encoder.encode(sseEvent({ type: 'ping', ts: Date.now() })));
+                } catch {}
+            }, 5_000);
+            try {
+                const it = typeof generator === 'function' ? generator(signal) : generator;
+                for await (const chunk of it) {
+                    if (signal?.aborted) break;
+                    controller.enqueue(encoder.encode(chunk));
+                }
+            } catch (e) {
+                const error = e as Error;
+                if (error.name !== 'AbortError' && !signal?.aborted) {
+                    controller.enqueue(encoder.encode(sseEvent({ type: 'error_message', content: error.message })));
+                }
+            } finally {
+                clearInterval(heartbeat);
+                controller.close();
+            }
+        },
+        cancel() {},
+    });
+
+    return new Response(readable, {
+        status: 200,
+        headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        },
+    });
 }

@@ -6,7 +6,7 @@ import { initChatModel } from 'langchain';
 import { tool } from 'langchain';
 import { z } from 'zod';
 import { HumanMessage, AIMessage, ToolMessage as LCToolMessage } from '@langchain/core/messages';
-import { getAgentEnv, createModel, createLogger } from './_shared';
+import { getAgentEnv, createModel, createLogger, sseEvent, createSSEResponse } from './_shared';
 
 type Model = Awaited<ReturnType<typeof initChatModel>>;
 
@@ -29,6 +29,11 @@ interface UserMemory {
     toneNotes: string;
 }
 
+/**
+ * 读取最新一条偏好记录。
+ * 用 `appendMessage` 多 record 累积历史，"读最新" 即可。
+ * 不再用 `clearMessages + appendMessage` 模拟 KV（与 SOP H-163 冲突）。
+ */
 async function loadUserMemory(store: any, userId: string): Promise<UserMemory | null> {
     if (!store) return null;
     try {
@@ -45,6 +50,10 @@ async function loadUserMemory(store: any, userId: string): Promise<UserMemory | 
     }
 }
 
+/**
+ * 记录偏好：直接 appendMessage 一条新 record（保留历史）。
+ * 不再 clearMessages——历史演化是 audit 友好的。
+ */
 async function recordUsage(store: any, userId: string, topic: string, keywords?: string, style?: string, length?: string) {
     if (!store) return;
     try {
@@ -68,7 +77,6 @@ async function recordUsage(store: any, userId: string, topic: string, keywords?:
         prefs.totalArticles = (prefs.totalArticles || 0) + 1;
         prefs.lastActiveAt = new Date().toISOString();
 
-        try { await store.clearMessages({ conversationId }); } catch {}
         await store.appendMessage({
             conversationId, userId, role: 'system',
             content: JSON.stringify(prefs),
@@ -111,7 +119,7 @@ function buildSystemPrompt(memory: UserMemory | null, articleLength: string): st
 每个 ## 下必须有 2-3 个 ### 子节。禁止全文只用 ## 平铺。
 
 ## 长度：${articleLength}
-${articleLength === 'short' ? '~1000字，4-5个##，每##含2个###' : articleLength === 'long' ? '~5000字，10-12个##，每##含3-4个###' : '~2500字，6-8个##，每##含2-3个###'}
+:${articleLength === 'short' ? '~1000字，4-5个##，每##含2个###' : articleLength === 'long' ? '~5000字，10-12个##，每##含3-4个###' : '~2500字，6-8个##，每##含2-3个###'}
 
 语言：与用户话题一致。中文按汉字计，必须达到目标字数。`;
 
@@ -223,7 +231,7 @@ async function* generateStream(modelInstance: Model, userMessage: string, system
                         continue;
                     }
                     const cleaned = msg.text.replace(/\n{3,}/g, '\n\n');
-                    if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
+                    if (cleaned) yield sseEvent({ type: 'ai_response', content: cleaned });
                 }
             }
 
@@ -253,12 +261,12 @@ async function* generateStream(modelInstance: Model, userMessage: string, system
                 for (let j = 0; j < aiMsg.tool_calls!.length; j++) {
                     const tc = aiMsg.tool_calls![j];
                     if (j === 0) {
-                        yield `data: ${JSON.stringify({ type: 'tool_call', name: tc.name })}\n\n`;
+                        yield sseEvent({ type: 'tool_call', name: tc.name });
                         const toolFn = toolMap[tc.name];
                         if (toolFn) {
                             const result = await (toolFn as any).invoke(tc.args);
                             const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-                            yield `data: ${JSON.stringify({ type: 'tool_result', name: tc.name, content: resultStr })}\n\n`;
+                            yield sseEvent({ type: 'tool_result', name: tc.name, content: resultStr });
                             messages.push(new LCToolMessage({ content: resultStr, tool_call_id: tc.id || '' }));
                         }
                     } else {
@@ -280,13 +288,12 @@ async function* generateStream(modelInstance: Model, userMessage: string, system
             logger.log('Stream terminated by runtime');
         } else {
             logger.error('Error:', error.message);
-            yield `data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`;
+            yield sseEvent({ type: 'error_message', content: error.message });
         }
     }
 
     logger.log(`Tokens — input: ${totalInputTokens}, output: ${totalOutputTokens}`);
-    yield `data: ${JSON.stringify({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens })}\n\n`;
-    yield "data: [DONE]\n\n";
+    yield sseEvent({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens });
 }
 
 // ============================================================
@@ -329,34 +336,19 @@ export async function onRequest(context: any) {
         });
     }
 
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-        async start(controller) {
-            const heartbeat = setInterval(() => {
-                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`)); } catch {}
-            }, 5_000);
+    const generator = (s?: AbortSignal) => {
+        const g = generateStream(modelInstance, userMessage, systemPrompt, contextTools, s);
+        // wrap: append [DONE] and fire-and-forget recordUsage
+        return (async function* () {
             try {
-                for await (const chunk of generateStream(modelInstance, userMessage, systemPrompt, contextTools, signal)) {
-                    if (signal?.aborted) break;
-                    controller.enqueue(encoder.encode(chunk));
-                }
-            } catch (e) {
-                const error = e as Error;
-                if (error.name !== 'AbortError' && !signal?.aborted) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`));
-                }
+                for await (const chunk of g) yield chunk;
             } finally {
-                clearInterval(heartbeat);
-                controller.close();
+                // recordUsage after stream completes (or aborts)
+                recordUsage(store, userId, topic || message?.slice(0, 50), keywords, style, length).catch(() => {});
+                yield "data: [DONE]\n\n";
             }
+        })();
+    };
 
-            recordUsage(store, userId, topic || message?.slice(0, 50), keywords, style, length).catch(() => {});
-        },
-        cancel() { logger.log('Client disconnected'); },
-    });
-
-    return new Response(readable, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' },
-    });
+    return createSSEResponse(generator, signal);
 }

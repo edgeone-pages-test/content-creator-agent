@@ -1,12 +1,14 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
+  "framework": "nextjs",
   "cloudFunctions": {
     "nodejs": {
       "includeFiles": []
     }
   },
   "agents": {
-    "externalNodeModules": ["@langchain/openai", "@langchain/core"]
+    "framework": "langgraph",
+    "externalNodeModules": ["@langchain/openai", "@langchain/core", "deepagents", "langchain"]
   }
 }

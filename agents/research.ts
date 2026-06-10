@@ -6,7 +6,7 @@ import { initChatModel, AIMessageChunk, ToolMessage, tool } from 'langchain';
 import { modelRetryMiddleware, modelCallLimitMiddleware } from 'langchain';
 import { createDeepAgent } from 'deepagents';
 import { z } from 'zod';
-import { getAgentEnv, createModel, createLogger } from './_shared';
+import { getAgentEnv, createModel, createLogger, sseEvent, createSSEResponse } from './_shared';
 
 type Model = Awaited<ReturnType<typeof initChatModel>>;
 type Agent = ReturnType<typeof createDeepAgent>;
@@ -88,23 +88,23 @@ async function* eventStream(agentInstance: Agent, userMessage: string, signal?: 
 
             if (AIMessageChunk.isInstance(message) && message.tool_call_chunks?.length) {
                 for (const tc of message.tool_call_chunks) {
-                    if (tc.name) yield `data: ${JSON.stringify({ type: 'tool_call', name: tc.name })}\n\n`;
+                    if (tc.name) yield sseEvent({ type: 'tool_call', name: tc.name });
                 }
                 continue;
             }
             if (ToolMessage.isInstance(message)) {
-                yield `data: ${JSON.stringify({ type: 'tool_result', name: message.name, content: message.text?.slice(0, 500) })}\n\n`;
+                yield sseEvent({ type: 'tool_result', name: message.name, content: message.text?.slice(0, 500) });
                 continue;
             }
             if (AIMessageChunk.isInstance(message) && message.text) {
                 const cleaned = message.text.replace(/\n{3,}/g, '\n\n');
-                if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
+                if (cleaned) yield sseEvent({ type: 'ai_response', content: cleaned });
             }
         }
     } catch (e: unknown) {
         const error = e as Error;
         if (error.name !== 'AbortError' && !signal?.aborted) {
-            yield `data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`;
+            yield sseEvent({ type: 'error_message', content: error.message });
         }
     }
     yield "data: [DONE]\n\n";
@@ -131,27 +131,6 @@ export async function onRequest(context: any) {
     }
 
     const userMessage = `Research the following topic thoroughly and provide a structured summary: "${topic}"`;
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-        async start(controller) {
-            const heartbeat = setInterval(() => {
-                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`)); } catch {}
-            }, 5_000);
-            try {
-                for await (const chunk of eventStream(agentInstance, userMessage, signal)) {
-                    if (signal?.aborted) break;
-                    controller.enqueue(encoder.encode(chunk));
-                }
-            } finally {
-                clearInterval(heartbeat);
-                controller.close();
-            }
-        },
-        cancel() { logger.log('Client disconnected'); },
-    });
-
-    return new Response(readable, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' },
-    });
+    const generator = (s?: AbortSignal) => eventStream(agentInstance, userMessage, s);
+    return createSSEResponse(generator, signal);
 }

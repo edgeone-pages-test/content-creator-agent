@@ -11,7 +11,7 @@
  */
 import { initChatModel } from 'langchain';
 import { HumanMessage } from '@langchain/core/messages';
-import { getAgentEnv, createModel, createLogger } from './_shared';
+import { getAgentEnv, createModel, createLogger, sseEvent, createSSEResponse } from './_shared';
 
 type Model = Awaited<ReturnType<typeof initChatModel>>;
 
@@ -75,7 +75,7 @@ async function* eventStream(modelInstance: Model, systemPrompt: string, userMess
             if (msg?.text) {
                 const cleaned = msg.text.replace(/\n{3,}/g, '\n\n');
                 if (cleaned) {
-                    yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
+                    yield sseEvent({ type: 'ai_response', content: cleaned });
                 }
             }
         }
@@ -86,10 +86,10 @@ async function* eventStream(modelInstance: Model, systemPrompt: string, userMess
             logger.log('Aborted');
         } else {
             logger.error('Error:', error.message);
-            yield `data: ${JSON.stringify({ type: 'error_message', content: `Error: ${error.message}` })}\n\n`;
+            yield sseEvent({ type: 'error_message', content: `Error: ${error.message}` });
         }
     }
-    yield `data: ${JSON.stringify({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens })}\n\n`;
+    yield sseEvent({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens });
     yield "data: [DONE]\n\n";
 }
 
@@ -129,38 +129,6 @@ export async function onRequest(context: any) {
         });
     }
 
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-        async start(controller) {
-            const heartbeat = setInterval(() => {
-                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`)); } catch {}
-            }, 5_000);
-
-            try {
-                for await (const chunk of eventStream(modelInstance, systemPrompt, userMessage, signal)) {
-                    if (signal?.aborted) break;
-                    controller.enqueue(encoder.encode(chunk));
-                }
-            } catch (e) {
-                const error = e as Error;
-                if (error.name !== 'AbortError' && !signal?.aborted) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`));
-                }
-            } finally {
-                clearInterval(heartbeat);
-                controller.close();
-            }
-        },
-        cancel() { logger.log('Client disconnected'); },
-    });
-
-    return new Response(readable, {
-        status: 200,
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-        },
-    });
+    const generator = (s?: AbortSignal) => eventStream(modelInstance, systemPrompt, userMessage, s);
+    return createSSEResponse(generator, signal);
 }

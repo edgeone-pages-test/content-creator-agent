@@ -2,7 +2,11 @@
  * Articles CRUD — EdgeOne Pages Node Function
  * File path cloud-functions/articles/index.ts maps to POST /articles
  *
- * Handles article persistence via context.store message API.
+ * Handles article persistence via the cloud-function store message API.
+ * Each article version is stored as one record; the latest record is the
+ * "current version". This avoids the deprecated `clearMessages+appendMessage`
+ * pattern (SOP H-163) and gives a free audit trail.
+ *
  * Actions: list | save | addVersion | get | delete
  */
 import { createLogger } from '../_logger';
@@ -28,6 +32,9 @@ interface ArticleData {
 
 const MANIFEST_CONV = 'articles-manifest';
 
+/**
+ * Read the latest manifest record (single record; newest history wins).
+ */
 async function getManifest(store: any): Promise<string[]> {
     try {
         const messages = await store.getMessages({ conversationId: MANIFEST_CONV, limit: 1, order: 'desc' });
@@ -41,15 +48,22 @@ async function getManifest(store: any): Promise<string[]> {
     return [];
 }
 
+/**
+ * Persist a manifest snapshot by appending a new record. We never call
+ * clearMessages — the latest record always represents the current state.
+ */
 async function saveManifest(store: any, ids: string[]) {
-    try { await store.clearMessages({ conversationId: MANIFEST_CONV }); } catch {}
     await store.appendMessage({
         conversationId: MANIFEST_CONV,
         role: 'system',
         content: JSON.stringify(ids),
+        metadata: { type: 'manifest', ts: new Date().toISOString() },
     });
 }
 
+/**
+ * Read the latest version of an article.
+ */
 async function getArticleById(store: any, id: string): Promise<ArticleData | null> {
     try {
         const messages = await store.getMessages({ conversationId: `article-${id}`, limit: 1, order: 'desc' });
@@ -62,13 +76,17 @@ async function getArticleById(store: any, id: string): Promise<ArticleData | nul
     return null;
 }
 
-async function storeArticle(store: any, articleData: ArticleData) {
-    try { await store.clearMessages({ conversationId: `article-${articleData.id}` }); } catch {}
+/**
+ * Append a new version record. Multi-record accumulation preserves history.
+ * `articleData` should be the *new* full article state (with one more version
+ * than what existed before).
+ */
+async function appendArticleVersion(store: any, articleData: ArticleData) {
     await store.appendMessage({
         conversationId: `article-${articleData.id}`,
         role: 'system',
         content: JSON.stringify(articleData),
-        metadata: { type: 'article', id: articleData.id },
+        metadata: { type: 'article', id: articleData.id, version: articleData.versions.length - 1 },
     });
 }
 
@@ -131,7 +149,7 @@ export async function onRequestPost(context: any) {
                     versions: [{ content: article.content, createdAt: now, wordCount }],
                     currentVersion: 0,
                 };
-                await storeArticle(store, articleData);
+                await appendArticleVersion(store, articleData);
                 const ids = await getManifest(store);
                 if (!ids.includes(id)) {
                     await saveManifest(store, [id, ...ids]);
@@ -156,7 +174,7 @@ export async function onRequestPost(context: any) {
                 existing.wordCount = wordCount;
                 const firstLine = newContent.split('\n').find((l: string) => l.trim()) || 'Untitled';
                 existing.title = firstLine.replace(/^#+\s*/, '').slice(0, 100);
-                await storeArticle(store, existing);
+                await appendArticleVersion(store, existing);
                 logger.log('Added version:', id, `v${existing.versions.length} (${wordCount} words)`);
                 return createResponse({ success: true, id, versionCount: existing.versions.length });
             }

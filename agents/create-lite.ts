@@ -6,7 +6,7 @@ import { initChatModel } from 'langchain';
 import { tool } from 'langchain';
 import { z } from 'zod';
 import { HumanMessage, AIMessage, ToolMessage as LCToolMessage } from '@langchain/core/messages';
-import { getAgentEnv, createModel, createLogger } from './_shared';
+import { getAgentEnv, createModel, createLogger, sseEvent, createSSEResponse } from './_shared';
 
 type Model = Awaited<ReturnType<typeof initChatModel>>;
 
@@ -136,7 +136,7 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                     // Phase 2 (post-search): stream the actual article content.
                     if (searchDone) {
                         const cleaned = stripDSML(msg.text).replace(/\n{3,}/g, '\n\n');
-                        if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
+                        if (cleaned) yield sseEvent({ type: 'ai_response', content: cleaned });
                     }
                 }
             }
@@ -163,10 +163,10 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
 
                         const searchResults: string[] = [];
                         for (const q of uniqueQueries) {
-                            yield `data: ${JSON.stringify({ type: 'tool_call', name: 'search_web' })}\n\n`;
+                            yield sseEvent({ type: 'tool_call', name: 'search_web' });
                             const result = await (searchTool as any).invoke({ query: q });
                             const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-                            yield `data: ${JSON.stringify({ type: 'tool_result', name: 'search_web', content: resultStr.slice(0, 500) })}\n\n`;
+                            yield sseEvent({ type: 'tool_result', name: 'search_web', content: resultStr.slice(0, 500) });
                             searchResults.push(`Query: ${q}\n${resultStr}`);
                         }
 
@@ -182,7 +182,7 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                     }
                     // Model wrote the article without searching — stream it now
                     const cleaned = stripDSML(fullContent).replace(/\n{3,}/g, '\n\n');
-                    if (cleaned) yield `data: ${JSON.stringify({ type: 'ai_response', content: cleaned })}\n\n`;
+                    if (cleaned) yield sseEvent({ type: 'ai_response', content: cleaned });
                 }
                 break;
             }
@@ -199,13 +199,13 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
                 messages.push(aiMsg);
 
                 for (const tc of aiMsg.tool_calls || []) {
-                    yield `data: ${JSON.stringify({ type: 'tool_call', name: tc.name })}\n\n`;
+                    yield sseEvent({ type: 'tool_call', name: tc.name });
 
                     const toolFn = toolMap[tc.name];
                     if (toolFn) {
                         const result = await (toolFn as any).invoke(tc.args);
                         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-                        yield `data: ${JSON.stringify({ type: 'tool_result', name: tc.name, content: resultStr.slice(0, 500) })}\n\n`;
+                        yield sseEvent({ type: 'tool_result', name: tc.name, content: resultStr.slice(0, 500) });
                         messages.push(new LCToolMessage({ content: resultStr, tool_call_id: tc.id || '' }));
                     }
                 }
@@ -224,11 +224,11 @@ async function* eventStream(modelInstance: Model, userMessage: string, contextTo
             logger.log('Stream terminated by runtime');
         } else {
             logger.error('Error:', error.message);
-            yield `data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`;
+            yield sseEvent({ type: 'error_message', content: error.message });
         }
     }
 
-    yield `data: ${JSON.stringify({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens })}\n\n`;
+    yield sseEvent({ type: 'usage', input_tokens: totalInputTokens, output_tokens: totalOutputTokens, total_tokens: totalInputTokens + totalOutputTokens });
     yield "data: [DONE]\n\n";
 }
 
@@ -261,29 +261,6 @@ export async function onRequest(context: any) {
         return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-        async start(controller) {
-            const heartbeat = setInterval(() => {
-                try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ping', ts: Date.now() })}\n\n`)); } catch {}
-            }, 5_000);
-            try {
-                for await (const chunk of eventStream(modelInstance, userMessage, contextTools, signal)) {
-                    if (signal?.aborted) break;
-                    controller.enqueue(encoder.encode(chunk));
-                }
-            } catch (e) {
-                const error = e as Error;
-                if (error.name !== 'AbortError' && !signal?.aborted) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error_message', content: error.message })}\n\n`));
-                }
-            } finally { clearInterval(heartbeat); controller.close(); }
-        },
-        cancel() { logger.log('Disconnected'); },
-    });
-
-    return new Response(readable, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' },
-    });
+    const generator = (s?: AbortSignal) => eventStream(modelInstance, userMessage, contextTools, s);
+    return createSSEResponse(generator, signal);
 }

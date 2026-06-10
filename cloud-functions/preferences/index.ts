@@ -2,7 +2,11 @@
  * User Preferences — EdgeOne Pages Node Function
  * File path cloud-functions/preferences/index.ts maps to POST /preferences
  *
- * Handles persistent preference storage via context.store message API.
+ * Persists per-user preferences via the cloud-function store message API.
+ * Each save/recordUsage appends a new record; the latest record is the
+ * "current" state. We never call `clearMessages` + `appendMessage` to
+ * simulate a KV (SOP H-163 forbids it).
+ *
  * Actions: get | save | recordUsage
  */
 import { createLogger } from '../_logger';
@@ -58,17 +62,38 @@ export async function onRequestPost(context: any) {
 
     const conversationId = `preferences-${userId}`;
 
+    /**
+     * Read the most recent preferences record (latest write wins).
+     */
+    async function readLatestPrefs(): Promise<UserPreferences> {
+        try {
+            const messages = await store.getMessages({ conversationId, limit: 1, order: 'desc' });
+            if (messages.length > 0 && messages[0].content) {
+                const content = messages[0].content;
+                return typeof content === 'string' ? JSON.parse(content) : content;
+            }
+        } catch {}
+        return createDefaultPreferences(userId);
+    }
+
+    /**
+     * Persist a new preferences record by appending. We keep history
+     * (SOP H-165 "stored as multiple records via appendMessage").
+     */
+    async function writePrefs(prefs: UserPreferences) {
+        await store.appendMessage({
+            conversationId,
+            role: 'system',
+            content: JSON.stringify(prefs),
+            metadata: { type: 'preferences', userId, ts: prefs.lastActiveAt },
+        });
+    }
+
     try {
         switch (action) {
             case 'get': {
-                const messages = await store.getMessages({ conversationId, limit: 1, order: 'desc' });
-                if (messages.length > 0 && messages[0].content) {
-                    const prefs = typeof messages[0].content === 'string'
-                        ? JSON.parse(messages[0].content)
-                        : messages[0].content;
-                    return createResponse({ preferences: prefs });
-                }
-                return createResponse({ preferences: createDefaultPreferences(userId) });
+                const prefs = await readLatestPrefs();
+                return createResponse({ preferences: prefs });
             }
 
             case 'save': {
@@ -81,29 +106,14 @@ export async function onRequestPost(context: any) {
                     userId,
                     lastActiveAt: new Date().toISOString(),
                 };
-                try { await store.clearMessages({ conversationId }); } catch {}
-                await store.appendMessage({
-                    conversationId,
-                    role: 'system',
-                    content: JSON.stringify(merged),
-                    metadata: { type: 'preferences', userId },
-                });
+                await writePrefs(merged);
                 logger.log('Preferences saved for:', userId);
                 return createResponse({ success: true });
             }
 
             case 'recordUsage': {
                 const { topic, keywords, style, length } = body;
-                let prefs = createDefaultPreferences(userId);
-
-                try {
-                    const messages = await store.getMessages({ conversationId, limit: 1, order: 'desc' });
-                    if (messages.length > 0 && messages[0].content) {
-                        prefs = typeof messages[0].content === 'string'
-                            ? JSON.parse(messages[0].content)
-                            : messages[0].content;
-                    }
-                } catch {}
+                const prefs = await readLatestPrefs();
 
                 if (topic) prefs.recentTopics = [topic, ...prefs.recentTopics.filter((t: string) => t !== topic)].slice(0, 10);
                 if (keywords) {
@@ -115,13 +125,7 @@ export async function onRequestPost(context: any) {
                 prefs.totalArticles = (prefs.totalArticles || 0) + 1;
                 prefs.lastActiveAt = new Date().toISOString();
 
-                try { await store.clearMessages({ conversationId }); } catch {}
-                await store.appendMessage({
-                    conversationId,
-                    role: 'system',
-                    content: JSON.stringify(prefs),
-                    metadata: { type: 'preferences', userId },
-                });
+                await writePrefs(prefs);
                 logger.log('Usage recorded:', userId, `(total: ${prefs.totalArticles})`);
                 return createResponse({ success: true, preferences: prefs });
             }
