@@ -1,5 +1,5 @@
 /**
- * Health check — EdgeOne Pages Node Function
+ * Health check — EdgeOne Makers Node Function
  * File path cloud-functions/health/index.ts maps to GET/POST /health
  */
 export async function onRequest() {

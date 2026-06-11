@@ -1,5 +1,5 @@
 /**
- * Articles CRUD — EdgeOne Pages Node Function
+ * Articles CRUD — EdgeOne Makers Node Function
  * File path cloud-functions/articles/index.ts maps to POST /articles
  *
  * Handles article persistence via the cloud-function store message API.

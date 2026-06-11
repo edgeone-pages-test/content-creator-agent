@@ -1,5 +1,5 @@
 /**
- * User Preferences — EdgeOne Pages Node Function
+ * User Preferences — EdgeOne Makers Node Function
  * File path cloud-functions/preferences/index.ts maps to POST /preferences
  *
  * Persists per-user preferences via the cloud-function store message API.
