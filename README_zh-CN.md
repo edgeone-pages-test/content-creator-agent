@@ -1,15 +1,10 @@
 # Content Creator（内容创作助手）
 
-**语言：** [English](./README.md) | 简体中文
-
 基于 DeepAgents + LangChain 构建、部署在 EdgeOne Makers 上的 AI 内容创作助手，支持实时联网搜索、大纲生成、文章写作、SEO 分析与版本管理。
 
 **Framework:** None (raw Node.js) · **Category:** Content · **Language:** TypeScript
 
 [![部署到 EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/makers/new?template=content-creator-agent&from=within&fromAgent=1&agentLang=typescript)
-
-<!-- TODO: confirm -->
-![preview](./assets/preview.png)
 
 ## Overview
 

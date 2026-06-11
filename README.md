@@ -1,15 +1,10 @@
 # Content Creator
 
-**Language:** English | [简体中文](./README_zh-CN.md)
-
 AI-powered content creation assistant with real web search, outline generation, article writing, SEO analysis, and version management. Built on DeepAgents + LangChain and deployed on EdgeOne Makers.
 
 **Framework:** None (raw Node.js) · **Category:** Content · **Language:** TypeScript
 
 [![Deploy to EdgeOne Makers](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.tencentcloud.com/edgeone/makers/new?template=content-creator-agent&from=within&fromAgent=1&agentLang=typescript)
-
-<!-- TODO: confirm -->
-![preview](./assets/preview.png)
 
 ## Overview
 
